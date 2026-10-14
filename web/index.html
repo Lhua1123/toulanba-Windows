@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>海边球场</title>
+<style>
+  :root { --s: 1; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #e7cfa1;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  #back { z-index: 0; }
+  #desk { position: fixed; inset: 0; z-index: 1; }
+  #front { z-index: 2; pointer-events: none; }
+  body.can-grab, body.can-grab * { cursor: grab; }
+  body.grabbing, body.grabbing * { cursor: grabbing; }
+  body.can-open #desk { cursor: pointer; }
+
+  /* the Mac app hosts each layer in its own window */
+  #fx { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+  body[data-layer="back"] > :not(#back):not(script),
+  body[data-layer="front"] > :not(#front):not(#fx):not(#toast):not(#hint):not(script) { display: none !important; }
+  html:has(body[data-layer="front"]), body[data-layer="front"] { background: transparent; }
+
+  #menubar {
+    position: fixed; top: 0; left: 0; right: 0; height: 30px; z-index: 5; pointer-events: none;
+    display: flex; align-items: center; gap: 19px; padding: 0 16px; box-sizing: border-box;
+    color: #fff; font-size: 13px; text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+    background: linear-gradient(rgba(0, 45, 60, .22), rgba(0, 45, 60, 0));
+  }
+  #menubar b { font-weight: 700; }
+  #menubar .right { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+  #menubar svg { width: 15px; height: 15px; fill: #fff; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
+
+  .icon {
+    position: absolute; width: calc(96px * var(--s));
+    margin-left: calc(-48px * var(--s)); margin-top: calc(-34px * var(--s));
+    display: flex; flex-direction: column; align-items: center; pointer-events: none;
+  }
+  .icon .img {
+    width: calc(68px * var(--s)); height: calc(68px * var(--s)); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; pointer-events: auto;
+  }
+  .icon img { width: calc(64px * var(--s)); height: calc(64px * var(--s)); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .3)); }
+  .icon .label {
+    margin-top: 2px; max-width: 100%; text-align: center;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .icon .label span {
+    pointer-events: auto; padding: 1px 4px; border-radius: 4px;
+    color: #fff; font-size: calc(12px * var(--s)); line-height: 1.3; font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 0 6px rgba(0, 0, 0, .3);
+    word-break: break-all; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  }
+  .icon.sel .img { background: rgba(0, 0, 0, .24); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2); }
+  .icon.sel .label span { background: #0a64d8; text-shadow: none; }
+  .band {
+    position: absolute; display: none; z-index: 10; pointer-events: none;
+    background: rgba(205, 215, 225, .24); border: 1px solid rgba(255, 255, 255, .75);
+  }
+
+  #hint {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 6; pointer-events: none;
+    background: rgba(18, 32, 40, .58); color: #fff; font-size: 13px; padding: 8px 15px; border-radius: 999px;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); white-space: nowrap; transition: opacity .5s;
+  }
+  #aim { position: fixed; inset: 0; width: 100vw; height: 100vh; display: none; pointer-events: none; overflow: visible;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45)); }
+  #aim .shaft { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 9; }
+  #aim .head { fill: #fff; }
+  #aim.on .shaft { stroke: #8cf5bd; } #aim.on .head { fill: #8cf5bd; }
+  #power { position: fixed; display: none; width: 12px; height: 112px; pointer-events: none; }
+  #power .track {
+    position: absolute; inset: 0; border-radius: 7px; overflow: hidden;
+    background: rgba(12, 26, 32, .5); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .85), 0 3px 10px rgba(0, 0, 0, .3);
+  }
+  #power .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(#ffd27a, #fff); opacity: .95; }
+  /* a scale every 10%, drawn over the fill */
+  #power .track::after { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(to top, transparent 0 calc(10% - 1px), rgba(20, 34, 40, .4) calc(10% - 1px) 10%); }
+  /* where the last throw was let go: white, or green if it went in */
+  #power .last { position: absolute; display: none; left: -8px; right: -2px; height: 2px; background: #fff;
+    box-shadow: 0 0 2px rgba(0, 0, 0, .6); }
+  #power .last::before { content: ''; position: absolute; left: -3px; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: inherit; }
+  #power .last.made { background: #8cf5bd; }
+  #toast {
+    position: fixed; z-index: 6; pointer-events: none; opacity: 0;
+    background: rgba(255, 255, 255, .94); color: #1b2a33; font-size: 13px; font-weight: 600;
+    padding: 7px 12px; border-radius: 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); white-space: nowrap;
+  }
+  #ctxmenu {
+    position: fixed; display: none; z-index: 20; min-width: 200px; padding: 5px;
+    background: rgba(246, 246, 248, .94); border-radius: 9px; font-size: 13px; color: #1d1d1f;
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    box-shadow: 0 0 0 .5px rgba(0, 0, 0, .18), 0 10px 30px rgba(0, 0, 0, .25);
+  }
+  #ctxmenu .mi { padding: 4px 10px; border-radius: 5px; }
+  #ctxmenu .mi:hover { background: #0a64d8; color: #fff; }
+  #ctxmenu .mi.off { color: #aaa; background: none; }
+
+  #basket {
+    position: fixed; display: none; z-index: 15; width: 380px;
+    background: rgba(250, 250, 252, .97); border-radius: 12px; overflow: hidden; color: #1d1d1f;
+    box-shadow: 0 0 0 .5px rgba(0, 0, 0, .2), 0 18px 50px rgba(0, 0, 0, .3);
+  }
+  #basket .bar { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid #e3e3e6; font-size: 13px; font-weight: 600; }
+  #basket .dot { width: 12px; height: 12px; border-radius: 50%; background: #d5d5d8; }
+  #basket .dot.close { background: #ff5f57; cursor: pointer; }
+  #basket .bar .t { margin-left: 8px; }
+  #basket .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 12px; max-height: 220px; overflow: auto; }
+  #basket .bi { display: flex; flex-direction: column; align-items: center; font-size: 11px; text-align: center; word-break: break-all; }
+  #basket .bi img { width: 44px; height: 44px; }
+  #basket .empty { grid-column: 1 / -1; color: #888; font-size: 13px; padding: 18px 0; text-align: center; }
+  #basket .foot { padding: 0 12px 12px; display: flex; justify-content: flex-end; }
+  #basket button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 0; background: #0a64d8; color: #fff; cursor: pointer; }
+  #basket button:disabled { background: #c9c9cf; cursor: default; }
+</style>
+</head>
+<body>
+  <canvas id="back"></canvas>
+  <div id="desk"></div>
+  <canvas id="front"></canvas>
+  <div id="fx"></div>
+
+  <div id="menubar">
+    <svg viewBox="0 0 16 16"><path d="M11.2 8.5c0-1.7 1.4-2.5 1.5-2.6-.8-1.2-2.1-1.4-2.5-1.4-1.1-.1-2.1.6-2.6.6-.6 0-1.4-.6-2.3-.6-1.2 0-2.3.7-2.9 1.8-1.2 2.1-.3 5.3.9 7 .6.8 1.3 1.8 2.2 1.7.9 0 1.2-.6 2.3-.6s1.4.6 2.3.6c1 0 1.6-.9 2.1-1.7.7-1 1-1.9 1-2-.1 0-2-.8-2-2.8zM9.5 3.4c.5-.6.8-1.4.7-2.2-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2.1.8.1 1.5-.4 2-1z"/></svg>
+    <b>Finder</b><span>文件</span><span>编辑</span><span>显示</span><span>前往</span><span>窗口</span><span>帮助</span>
+    <div class="right">
+      <svg viewBox="0 0 16 16"><path d="M8 12.5a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM8 8.7c1.3 0 2.5.5 3.4 1.4l-1 1A3.4 3.4 0 0 0 8 10.1c-.9 0-1.8.4-2.4 1l-1-1c.9-.9 2.1-1.4 3.4-1.4zM8 5c2.3 0 4.4.9 6 2.4l-1 1A7 7 0 0 0 8 6.4a7 7 0 0 0-5 2l-1-1A8.5 8.5 0 0 1 8 5z"/></svg>
+      <svg viewBox="0 0 22 16" style="width:22px"><rect x="1" y="4" width="17" height="8.5" rx="2.2" fill="none" stroke="#fff" stroke-width="1.2"/><rect x="2.8" y="5.8" width="11" height="4.9" rx="1" /><rect x="19" y="6.6" width="1.6" height="3.4" rx=".8"/></svg>
+      <span id="clock"></span>
+    </div>
+  </div>
+
+  <div id="hint"></div>
+  <div id="toast"></div>
+  <div id="ctxmenu"></div>
+  <div id="basket">
+    <div class="bar"><span class="dot close"></span><span class="dot"></span><span class="dot"></span><span class="t">篮筐</span></div>
+    <div class="grid"></div>
+    <div class="foot"><button>全部放回桌面</button></div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
