@@ -448,7 +448,9 @@ export function buildWorld(backRenderer, frontRenderer) {
   const front = frontRenderer ? buildFront(frontRenderer) : null;
   const daylight = new Daylight([back?.rig, front?.rig].filter(Boolean), [backRenderer, frontRenderer].filter(Boolean));
   return {
-    back: back?.scene, front: front?.scene, hoop: front?.hoop, scoreboard: front?.scoreboard,
+    back: back?.scene, front: front?.scene,
+    hoop: backRenderer ? back?.hoop : front?.hoop,
+    scoreboard: backRenderer ? back?.scoreboard : front?.scoreboard,
     update(t) { back?.update(t); },
     // noon | morning | dusk | night | auto
     setTime(mode, instant) { daylight.set(mode, instant); },
@@ -497,12 +499,12 @@ function buildBack(renderer) {
   top.receiveShadow = true;
   courtBack.add(top);
 
-  // the hoop casts its shadow onto the court in the back layer, but is drawn in the front layer
-  const caster = buildHoop();
-  const ghost = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
-  caster.traverse((o) => { if (o.isMesh) { o.material = ghost; o.receiveShadow = false; } });
-  courtBack.add(caster);
-  back.add(buildScoreboard({ ghost: true }).group);
+  // Windows 版把篮筐和记分牌画在桌面图标下面，图标永远不会被它们盖住。
+  const hoop = buildHoop();
+  hoop.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } });
+  courtBack.add(hoop);
+  const scoreboard = buildScoreboard();
+  back.add(scoreboard.group);
 
   // sea
   const seaMat = new THREE.ShaderMaterial({
@@ -596,7 +598,7 @@ function buildBack(renderer) {
   });
 
   return {
-    scene: back,
+    scene: back, hoop, scoreboard,
     rig: { ...backLights, scene: back, sea: seaMat, lamps: backLamps },
     update(t) {
       seaMat.uniforms.uTime.value = t;
@@ -614,14 +616,12 @@ function buildFront(renderer) {
   front.environmentIntensity = 0.45;
   const frontLights = addLights(front, 2048);
   const frontLamps = floodlights(front, { poles: false });
-  const courtFront = new THREE.Group();
-  courtFront.applyMatrix4(courtMatrix);
-  front.add(courtFront);
+  // 前层只负责纸团和阴影；篮筐/记分牌的可见副本在 back 层，避免遮住桌面图标。
+  // 仍创建不可见的引用对象，供点击命中、坐标投影和记分牌状态计算使用。
   const hoop = buildHoop();
-  hoop.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-  courtFront.add(hoop);
+  hoop.visible = false;
   const scoreboard = buildScoreboard();
-  front.add(scoreboard.group);
+  scoreboard.group.visible = false;
   const catcher = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ color: 0x3b2414, opacity: 0.34 }));
   catcher.rotation.x = -Math.PI / 2;
   catcher.position.y = 0.002;

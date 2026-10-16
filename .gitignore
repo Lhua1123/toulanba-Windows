@@ -1,2 +1,8 @@
 mac/build/
 .DS_Store
+# Windows / Visual Studio / .NET
+.vs/
+bin/
+obj/
+*.user
+*.suo

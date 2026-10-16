@@ -66,7 +66,7 @@ function showStats(animate = true) {
   lastActive = performance.now();
 }
 function saveStats() {
-  if (LAYER === 'front') post({ type: 'stats', ...stats });
+  if (LAYER !== 'demo') post({ type: 'stats', ...stats });
   else try { localStorage.setItem('court-stats', JSON.stringify(stats)); } catch {}
 }
 if (LAYER === 'demo') try { Object.assign(stats, JSON.parse(localStorage.getItem('court-stats') || '{}')); } catch {}
@@ -152,7 +152,12 @@ if (HAS_FRONT) {
   // which WebKit can swallow after pointerdown handling)
   const DOUBLE_MS = 450;
   let held = null, lastTap = { b: null, t: 0 };
+  const inputLog = (event, e) => {
+    if (LAYER !== 'front') return;
+    post({ type: 'input', event, x: Math.round(e.clientX), y: Math.round(e.clientY), key: e.key || '' });
+  };
   addEventListener('pointerdown', (e) => {
+    inputLog('pointerdown', e);
     sfx.unlock();
     lastActive = performance.now();
     if (e.button !== 0) return;
@@ -186,6 +191,7 @@ if (HAS_FRONT) {
     document.body.classList.toggle('can-open', hoopHit(e.clientX, e.clientY) || scoreHit(e.clientX, e.clientY));
   }, true);
   addEventListener('pointerup', (e) => {
+    inputLog('pointerup', e);
     if (!held) return;
     e.stopPropagation();
     const b = held; held = null;
@@ -195,13 +201,17 @@ if (HAS_FRONT) {
 
   // Space is only taken while a ball is in hand; otherwise it stays Finder's Quick Look.
   addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Escape') inputLog('keydown', e);
     if (!aim.active) return;
     if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) aim.press(); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); aim.turn(-0.03); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); aim.turn(0.03); }
     else if (e.key === 'Escape') { if (aim.charging) aim.cancelCharge(); else aim.end(true); }
   });
-  addEventListener('keyup', (e) => { if (e.code === 'Space' && aim.charging) { e.preventDefault(); aim.letGo(); } });
+  addEventListener('keyup', (e) => {
+    if (e.code === 'Space') inputLog('keyup', e);
+    if (e.code === 'Space' && aim.charging) { e.preventDefault(); aim.letGo(); }
+  });
   addEventListener('blur', () => aim.cancelCharge());
 
   function watchMiss(b) {
