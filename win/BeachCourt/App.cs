@@ -37,13 +37,16 @@ class App : Form
     readonly Dictionary<int, List<(string Path, double X, double Y)>> _pending = new();
     readonly Dictionary<int, List<BallFile>> _balls = new();
     readonly Dictionary<int, DateTime> _ballMade = new();
+    readonly Dictionary<int, BallDisposition> _disposition = new();
+
+    enum BallDisposition { Desktop, Recycle }
     int _nextId = 1;
 
-    record BallFile(string Name, string Staged, double X, double Y);
+    record BallFile(string Name, string Original, string Staged, double X, double Y);
 
     public App()
     {
-        Text = "海边球场（Ctrl+Alt+X 揉纸团 · Ctrl+Alt+Z 撤销 · Ctrl+Alt+Q 退出）";
+        Text = "海边球场（Ctrl+Alt+X 回桌面 · Ctrl+Alt+D 进回收站 · Ctrl+Alt+Q 退出）";
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         Bounds = Screen.PrimaryScreen.Bounds;
@@ -100,6 +103,7 @@ class App : Form
         if (!_hotKeys.UndoOk) Log("warn: Ctrl+Alt+Z 注册失败");
         if (!_hotKeys.QuitOk) Log("warn: Ctrl+Alt+Q 注册失败");
         else Log("safe exit hotkey ready: Ctrl+Alt+Q");
+        if (!_hotKeys.RecycleCrumpleOk) Log("warn: Ctrl+Alt+D 注册失败");
 
         _inputHooks = new InputHooks();
         _inputHooks.MouseMove += OnNativeMouseMove;
@@ -260,7 +264,8 @@ class App : Form
         if (m.Msg == Native.WM_HOTKEY)
         {
             int id = m.WParam.ToInt32();
-            if (id == HotKeys.IdCrumple) CrumpleSelection();
+            if (id == HotKeys.IdCrumple) CrumpleSelection(false);
+            else if (id == HotKeys.IdRecycleCrumple) CrumpleSelection(true);
             else if (id == HotKeys.IdUndo) UndoLast();
             else if (id == HotKeys.IdTime) CycleTime();
             else if (id == HotKeys.IdQuit) Close();
@@ -344,11 +349,30 @@ class App : Form
     }
 
     string _timeMode = "auto";
+
+    static string AutoTimeMode(DateTime now)
+    {
+        double hour = now.Hour + now.Minute / 60.0;
+        if (hour >= 5 && hour < 9) return "morning";
+        if (hour >= 9 && hour < 17) return "noon";
+        if (hour >= 17 && hour < 19.5) return "dusk";
+        return "night";
+    }
+
     void CycleTime()
     {
-        var modes = new[] { "auto", "noon", "morning", "dusk", "night" };
-        int i = Array.IndexOf(modes, _timeMode);
-        _timeMode = modes[(i + 1) % modes.Length];
+        var presets = new[] { "noon", "morning", "dusk", "night" };
+        if (_timeMode == "auto")
+        {
+            // 从当前自动场景的下一个开始，确保第一次手动切换一定产生可见变化。
+            int current = Array.IndexOf(presets, AutoTimeMode(DateTime.Now));
+            _timeMode = presets[(current + 1) % presets.Length];
+        }
+        else
+        {
+            int i = Array.IndexOf(presets, _timeMode);
+            _timeMode = i < 0 || i == presets.Length - 1 ? "auto" : presets[i + 1];
+        }
         Log("time -> " + _timeMode);
         SetTimeAll(_timeMode);
     }
@@ -391,20 +415,21 @@ class App : Form
     }
 
 
-    void CrumpleSelection()
+    void CrumpleSelection(bool recycle)
     {
         var picked = Explorer.Selection();
         if (picked.Count == 0) { Log("桌面无选中文件"); return; } if (picked.Count > 40) { picked = picked.Take(40).ToList(); Log("文件较多，只取前 40 个"); }
         int id = _nextId++;
         int cssSize = (int)Math.Round(Explorer.IconSize / DpiScale);
         _pending[id] = picked.Select(p => (p.Path, (double)p.X, (double)p.Y)).ToList();
+        _disposition[id] = recycle ? BallDisposition.Recycle : BallDisposition.Desktop;
 
         var items = picked.Select(p =>
         {
             var (wx, wy) = ScreenToWeb(p.X, p.Y);
             return new { name = Path.GetFileName(p.Path), src = Thumbnails.DataUrl(p.Path, Explorer.IconSize), x = wx, y = wy };
         }).ToArray();
-        Log("crumple #" + id + ": " + picked.Count + " 个文件");
+        Log("crumple #" + id + ": " + picked.Count + " 个文件 -> " + (recycle ? "回收站" : "桌面"));
         _ = _bridge.CallAsync("void court.crumple(" + id + ", " + JsonSerializer.Serialize(items) + ", " + cssSize + ")");
         _playActive = true;
         MakeInteractive(true);
@@ -453,7 +478,18 @@ class App : Form
         menu.Items.Add("打开篮筐文件夹", null, (_, _) => OnJsMessage("openBasket", default));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出海边球场（Ctrl+Alt+Q）", null, (_, _) => Close());
-        menu.Closed += (_, _) => menu.Dispose();
+        // 菜单项点击会先触发 Closed；同步 Dispose 会在 ToolStrip 尚未完成收尾时访问已释放控件。
+        menu.Closed += (_, _) =>
+        {
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    if (!menu.IsDisposed) menu.Dispose();
+                }));
+            }
+            catch (InvalidOperationException) { }
+        };
         menu.Show(screen);
     }
 
@@ -467,7 +503,7 @@ class App : Form
         foreach (var (path, x, y) in picked)
         {
             string dest = Path.Combine(dir, Path.GetFileName(path));
-            try { File.Move(path, dest); files.Add(new BallFile(Path.GetFileName(path), dest, x, y)); }
+            try { File.Move(path, dest); files.Add(new BallFile(Path.GetFileName(path), path, dest, x, y)); }
             catch (Exception ex) { Log("离桌失败 " + Path.GetFileName(path) + ": " + ex.Message); }
         }
         _balls[id] = files;
@@ -477,15 +513,75 @@ class App : Form
 
     void Bank(int id)
     {
-        // 投进了：直接把文件放回桌面原位，不再存到「篮筐」文件夹
+        _disposition.TryGetValue(id, out var disposition);
+        if (disposition == BallDisposition.Recycle)
+        {
+            RecycleBall(id);
+            return;
+        }
+
+        // Ctrl+Alt+X：投进后把文件放回桌面原位。
         Log("banked #" + id + ": 投进，直接回桌面");
         _ = UnfoldAsync(id, false);
+    }
+
+    bool RecycleFile(BallFile file)
+    {
+        string target = file.Staged;
+        try
+        {
+            // 尽量先把文件移回原位置再进回收站，这样回收站恢复时会回到桌面原位置。
+            if (!File.Exists(file.Original) && !Directory.Exists(file.Original))
+            {
+                File.Move(file.Staged, file.Original);
+                target = file.Original;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("回收前放回原位失败 " + file.Name + ": " + ex.Message);
+        }
+
+        if (RecycleBin.SendToRecycleBin(target)) return true;
+        Log("回收失败 " + file.Name);
+        if (target != file.Staged && File.Exists(target))
+        {
+            try { File.Move(target, file.Staged); } catch { }
+        }
+        return false;
+    }
+    void RecycleBall(int id)
+    {
+        if (!_balls.Remove(id, out var files))
+        {
+            _disposition.Remove(id);
+            return;
+        }
+        _ballMade.Remove(id);
+        _disposition.Remove(id);
+
+        int recycled = 0;
+        foreach (var f in files)
+        {
+            if (RecycleFile(f)) recycled++;
+            else Log("回收失败 " + f.Name);
+        }
+        if (files.Count > 0) RemoveIfEmpty(Path.GetDirectoryName(files[0].Staged));
+        RemoveIfEmpty(Paths.Staging);
+        Log("banked #" + id + ": 投进，移入回收站 " + recycled + "/" + files.Count);
+
+        if (_balls.Count == 0 && _pending.Count == 0)
+        {
+            _playActive = false;
+            MakeDesktopLayer();
+        }
     }
 
     async Task UnfoldAsync(int id, bool animate)
     {
         if (!_balls.Remove(id, out var files)) return;
         _ballMade.Remove(id);
+        _disposition.Remove(id);
         var placed = new List<(string Name, double X, double Y)>();
         foreach (var f in files)
         {

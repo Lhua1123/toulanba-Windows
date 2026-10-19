@@ -5,10 +5,10 @@ namespace BeachCourt;
 
 sealed class HotKeys : IDisposable
 {
-    public const int IdCrumple = 1, IdUndo = 2, IdTime = 3, IdQuit = 4;
+    public const int IdCrumple = 1, IdUndo = 2, IdTime = 3, IdQuit = 4, IdRecycleCrumple = 5;
 
     readonly IntPtr _hwnd;
-    public readonly bool CrumpleOk, UndoOk, TimeOk, QuitOk;
+    public readonly bool CrumpleOk, UndoOk, TimeOk, QuitOk, RecycleCrumpleOk;
 
     public HotKeys(IntPtr hwnd)
     {
@@ -18,6 +18,7 @@ sealed class HotKeys : IDisposable
         UndoOk = Native.RegisterHotKey(hwnd, IdUndo, mod, (uint)Keys.Z);
         TimeOk = Native.RegisterHotKey(hwnd, IdTime, mod, (uint)Keys.T);
         QuitOk = Native.RegisterHotKey(hwnd, IdQuit, mod, (uint)Keys.Q);
+        RecycleCrumpleOk = Native.RegisterHotKey(hwnd, IdRecycleCrumple, mod, (uint)Keys.D);
     }
 
     public void Dispose()
@@ -26,5 +27,6 @@ sealed class HotKeys : IDisposable
         if (UndoOk) Native.UnregisterHotKey(_hwnd, IdUndo);
         if (TimeOk) Native.UnregisterHotKey(_hwnd, IdTime);
         if (QuitOk) Native.UnregisterHotKey(_hwnd, IdQuit);
+        if (RecycleCrumpleOk) Native.UnregisterHotKey(_hwnd, IdRecycleCrumple);
     }
 }

@@ -84,7 +84,8 @@ $guide = @(
   "",
   "基本操作",
   "--------",
-  "Ctrl+Alt+X：把桌面上选中的文件揉成纸团",
+  "Ctrl+Alt+X：把桌面上选中的文件揉成纸团，投进后回到桌面",
+  "Ctrl+Alt+D：把桌面上选中的文件揉成纸团，投进后移入回收站",
   "Ctrl+Alt+Z：撤销/拆开最近一个纸团",
   "Ctrl+Alt+T：切换正午、早晨、黄昏、夜晚、跟随系统",
   "Ctrl+Alt+Q：安全退出",
@@ -94,7 +95,8 @@ $guide = @(
   "",
   "文件安全",
   "--------",
-  "程序不会删除文件。揉纸团期间文件暂存在桌面的隐藏目录 .beach-court；",
+  "Ctrl+Alt+X 不会删除文件；Ctrl+Alt+D 投进后移入回收站，不永久删除。",
+  "揉纸团期间文件暂存在桌面的隐藏目录 .beach-court；",
   "拆开、退出或异常恢复时，文件会自动放回桌面。"
 )
 Set-Content -LiteralPath (Join-Path $publish "使用说明.txt") -Value $guide -Encoding utf8

@@ -5,7 +5,7 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace BeachCourt;
 
-/// 沙滩海背景层。全屏，挂到桌面图标「下面」（WorkerW），让球场垫在桌面图标背后。
+/// 沙滩海背景层。全屏，挂到桌面图标下面的 WorkerW，让球场垫在桌面图标背后。
 class CourtForm : Form
 {
     readonly WebView2 _view;
@@ -31,8 +31,18 @@ class CourtForm : Form
                 App.Log("back layer loading");
                 bool under = DesktopLayer.AttachUnderDesktop(Handle);
                 App.Log("back under desktop = " + under);
+                if (!under)
+                {
+                    // 挂不到图标下面时，宁可没有沙滩背景，也不能遮住桌面。
+                    Visible = false;
+                    App.Log("back layer unavailable; hidden to preserve desktop icons");
+                }
             }
-            catch (Exception ex) { App.Log("back init failed: " + ex.Message); }
+            catch (Exception ex)
+            {
+                App.Log("back init failed: " + ex.Message);
+                Visible = false;
+            }
         };
     }
 }
