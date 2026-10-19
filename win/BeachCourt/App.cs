@@ -22,6 +22,8 @@ class App : Form
     NotifyIcon _tray;
     ContextMenuStrip _trayMenu;
     System.Windows.Forms.Timer _hitTimer;
+    InputHooks _inputHooks;
+    DateTime _lastNativeMove = DateTime.MinValue;
 
     readonly List<(double X, double Y, double R)> _ballHits = new();
     Rectangle? _hoopHit;
@@ -65,6 +67,7 @@ class App : Form
         FormClosed += (_, _) =>
         {
             _hitTimer?.Dispose();
+            _inputHooks?.Dispose();
             _hotKeys?.Dispose();
             _tray.Visible = false;
             _tray.Dispose();
@@ -97,6 +100,11 @@ class App : Form
         if (!_hotKeys.QuitOk) Log("warn: Ctrl+Alt+Q 注册失败");
         else Log("safe exit hotkey ready: Ctrl+Alt+Q");
 
+        _inputHooks = new InputHooks();
+        _inputHooks.MouseMove += OnNativeMouseMove;
+        _inputHooks.MouseButton += OnNativeMouseButton;
+        _inputHooks.Key += OnNativeKey;
+
         _hitTimer = new System.Windows.Forms.Timer { Interval = 35 };
         _hitTimer.Tick += (_, _) => UpdateMouseMode();
         _hitTimer.Start();
@@ -119,6 +127,7 @@ class App : Form
         TopMost = true;
         DesktopLayer.SetClickThrough(Handle, false);
         _mouseTaken = true;
+        if (!_inputHooks.Start()) Log("warn: native input hooks failed");
         Log("input mode=interactive");
         if (focus) BeginInvoke(FocusWeb);
     }
@@ -126,6 +135,7 @@ class App : Form
     void MakeDesktopLayer()
     {
         if (!Visible && !_mouseTaken) return;
+        _inputHooks?.Stop();
         DesktopLayer.SetClickThrough(Handle, true);
         Opacity = 0;
         Hide();
@@ -136,6 +146,44 @@ class App : Form
     void FocusWeb()
     {
         try { Activate(); _bridge.FocusView(); } catch { }
+    }
+
+    (int X, int Y) ScreenToWebExact(double sx, double sy)
+    {
+        var origin = _view.PointToScreen(Point.Empty);
+        return ((int)Math.Round((sx - origin.X) / DpiScale), (int)Math.Round((sy - origin.Y) / DpiScale));
+    }
+
+    void OnNativeMouseMove(int x, int y)
+    {
+        if (!_playActive || !_mouseTaken) return;
+        var now = DateTime.UtcNow;
+        if ((now - _lastNativeMove).TotalMilliseconds < 16) return;
+        _lastNativeMove = now;
+        var (wx, wy) = ScreenToWebExact(x, y);
+        BeginInvoke(() => _bridge.NativePointer("pointermove", wx, wy));
+    }
+
+    void OnNativeMouseButton(int x, int y, bool down)
+    {
+        if (!_playActive || !_mouseTaken) return;
+        var (wx, wy) = ScreenToWebExact(x, y);
+        BeginInvoke(() => _bridge.NativePointer(down ? "pointerdown" : "pointerup", wx, wy, 0));
+    }
+
+    void OnNativeKey(bool down, uint vk, bool ctrl, bool alt, bool shift)
+    {
+        if (!_playActive || !_mouseTaken) return;
+        string key, code;
+        switch (vk)
+        {
+            case 0x20: key = " "; code = "Space"; break;
+            case 0x25: key = "ArrowLeft"; code = "ArrowLeft"; break;
+            case 0x27: key = "ArrowRight"; code = "ArrowRight"; break;
+            case 0x1B: key = "Escape"; code = "Escape"; break;
+            default: return;
+        }
+        BeginInvoke(() => _bridge.NativeKey(down, key, code, ctrl, alt, shift));
     }
 
     Rectangle WebToScreen(Rectangle r)
@@ -350,7 +398,6 @@ class App : Form
                 double y = c.TryGetProperty("y", out var y0) ? y0.GetDouble() : 0;
                 double r = c.TryGetProperty("r", out var r0) ? r0.GetDouble() : 32;
                 _ballHits.Add((x, y, r));
-                Log(string.Format("hit circle css=({0:F0},{1:F0}) r={2:F0}", x, y, r));
             }
         }
         _hoopHit = ReadRect(payload, "hoop");

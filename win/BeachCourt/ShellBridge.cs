@@ -56,6 +56,18 @@ class ShellBridge
         core.Navigate(url);
     }
 
+    public void NativePointer(string type, int x, int y, int button = 0)
+    {
+        string js = $"court.nativeInput('{type}', {x}, {y}, {button}, '', '', false, false, false)";
+        _ = CallAsync(js);
+    }
+
+    public void NativeKey(bool down, string key, string code, bool ctrl, bool alt, bool shift)
+    {
+        string js = $"court.nativeInput('{(down ? "keydown" : "keyup")}', 0, 0, 0, '{key}', '{code}', {(ctrl ? "true" : "false")}, {(alt ? "true" : "false")}, {(shift ? "true" : "false")})";
+        _ = CallAsync(js);
+    }
+
     public void FocusView()
     {
         try

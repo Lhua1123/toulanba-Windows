@@ -261,6 +261,14 @@ function unpack(b) {
 // ---------- bridge for the Mac app (front layer) ----------
 
 window.court = {
+  // Native input shim: the Windows shell forwards mouse/keyboard events here when
+  // WebView2 cannot receive them through a transparent layered window.
+  nativeInput(type, x, y, button = 0, key = '', code = '', ctrlKey = false, altKey = false, shiftKey = false) {
+    const common = { bubbles: true, cancelable: true, clientX: x, clientY: y, button, pointerId: 1, pointerType: 'mouse', ctrlKey, altKey, shiftKey };
+    if (type === 'pointermove') window.dispatchEvent(new PointerEvent(type, common));
+    else if (type === 'pointerdown' || type === 'pointerup') window.dispatchEvent(new PointerEvent(type, common));
+    else if (type === 'keydown' || type === 'keyup') window.dispatchEvent(new KeyboardEvent(type, { bubbles: true, cancelable: true, key, code, ctrlKey, altKey, shiftKey }));
+  },
   // items: [{ name, src (data URL), x, y }] — x, y: centre of each Finder icon, in window points
   async crumple(id, items, iconSize = 64) {
     document.documentElement.style.setProperty('--s', iconSize / 64);

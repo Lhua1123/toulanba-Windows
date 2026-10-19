@@ -41,6 +41,25 @@ static class Explorer
 
     public static int IconSize => Math.Max(Native.GetSystemMetrics(Native.SM_CXICON), 16);
 
+    public static bool SelectByName(string name)
+    {
+        var list = DesktopList();
+        if (list == IntPtr.Zero) return false;
+        try
+        {
+            var root = AutomationElement.FromHandle(list);
+            var cond = new PropertyCondition(AutomationElement.IsSelectionItemPatternAvailableProperty, true);
+            foreach (AutomationElement item in root.FindAll(TreeScope.Children, cond))
+            {
+                if (!string.Equals(item.Current.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                ((SelectionItemPattern)item.GetCurrentPattern(SelectionItemPattern.Pattern)).Select();
+                return true;
+            }
+        }
+        catch (Exception ex) { App.Log("SelectByName: " + ex.Message); }
+        return false;
+    }
+
     public static List<(string Path, int X, int Y)> Selection()
     {
         var result = new List<(string, int, int)>();
@@ -91,12 +110,18 @@ static class Explorer
 
     static int IndexOf(IntPtr list, string name)
     {
-        if (!Send(list, Native.LVM_GETITEMCOUNT, IntPtr.Zero, IntPtr.Zero, out int count)) return -1;
-        for (int i = 0; i < count && i < 5000; i++)
+        try
         {
-            // 虚拟列表取不到名字，这里只能用 UIA 反查；简单起见先按顺序近似
-            IntPtr r; Native.SendMessageTimeout(list, 0x1073, new IntPtr(i), IntPtr.Zero, Native.SMTO_ABORTIFHUNG, 100, out r);
+            var root = AutomationElement.FromHandle(list);
+            var cond = new PropertyCondition(AutomationElement.IsSelectionItemPatternAvailableProperty, true);
+            var items = root.FindAll(TreeScope.Children, cond);
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (string.Equals(items[i].Current.Name, name, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
         }
+        catch (Exception ex) { App.Log("IndexOf: " + ex.Message); }
         return -1;
     }
 }
