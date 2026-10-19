@@ -47,8 +47,8 @@ const stats = { made: 0, attempts: 0 };   // the scoreboard: made / attempts
 const HINTS = {
   start: '框选几个文件，双指捏合（或右键）把它们揉成纸团',
   ball: '指针瞄准，按住空格蓄力，松手投篮 · 条上的刻线是你上一投的力度 · Esc 取消蓄力',
-  miss: '没进。点一下纸团再投，或 ⌃⌥Z 放回桌面',
-  scored: '进了。⌃⌥Z 可以把这一球放回桌面，点篮板看投进去的文件',
+  miss: '没进。点一下纸团再投，或按 Ctrl+Alt+Z 放回桌面',
+  scored: '进了。按 Ctrl+Alt+Z 可以撤销这一球并放回桌面',
 };
 let hintTimer;
 function hint(key, hideAfter) {
@@ -117,7 +117,7 @@ if (HAS_FRONT) {
   balls = new BallSystem({
     scene: world.front, camera, images, sfx,
     onScore: (b) => {
-      toast(`${b.files.length} 个文件进了篮筐 · ⌃⌥Z 放回`); hint('scored', 5000);
+      toast(`${b.files.length} 个文件进了篮筐 · Ctrl+Alt+Z 撤销放回`); hint('scored', 5000);
       aim.result(b, true);
       stats.made = Math.min(stats.made + 1, stats.attempts); showStats(); saveStats();
     },
