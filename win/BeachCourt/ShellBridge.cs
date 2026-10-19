@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Web.WebView2.Core;
@@ -37,7 +38,11 @@ class ShellBridge
 
     public async Task InitAsync(string webRoot, string url, string userDataFolder)
     {
-        var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+        // 优先使用随包附带的固定版 WebView2，分发后无需用户安装任何运行时。
+        string bundled = Path.Combine(AppContext.BaseDirectory, "WebView2");
+        string browserFolder = File.Exists(Path.Combine(bundled, "msedgewebview2.exe")) ? bundled : null;
+        App.Log(browserFolder == null ? "WebView2 runtime: system" : "WebView2 runtime: bundled " + bundled);
+        var env = await CoreWebView2Environment.CreateAsync(browserFolder, userDataFolder);
         await _view.EnsureCoreWebView2Async(env);
         var core = _view.CoreWebView2;
         core.SetVirtualHostNameToFolderMapping("beachcourt.local", webRoot, CoreWebView2HostResourceAccessKind.Allow);

@@ -6,3 +6,9 @@ bin/
 obj/
 *.user
 *.suo
+
+# Portable packaging output
+build/
+dist/
+*.zip
+*.sha256

@@ -31,6 +31,7 @@ class App : Form
     bool _holding;
     bool _aiming;
     bool _mouseTaken;
+    bool _desktopMode;
     bool _playActive;
 
     readonly Dictionary<int, List<(string Path, double X, double Y)>> _pending = new();
@@ -127,6 +128,7 @@ class App : Form
         TopMost = true;
         DesktopLayer.SetClickThrough(Handle, false);
         _mouseTaken = true;
+        _desktopMode = false;
         if (!_inputHooks.Start()) Log("warn: native input hooks failed");
         Log("input mode=interactive");
         if (focus) BeginInvoke(FocusWeb);
@@ -134,11 +136,13 @@ class App : Form
 
     void MakeDesktopLayer()
     {
+        if (_desktopMode && !_mouseTaken) return;
         _inputHooks?.Stop();
         DesktopLayer.SetClickThrough(Handle, true);
         if (!Visible) Show();
         Opacity = 1;
         _mouseTaken = false;
+        _desktopMode = true;
         Log("input mode=desktop-layer");
     }
 
@@ -148,6 +152,7 @@ class App : Form
         DesktopLayer.SetClickThrough(Handle, true);
         Opacity = 0;   // 不 Hide，避免 WebView2 首次显示时黑色清屏闪烁
         _mouseTaken = false;
+        _desktopMode = false;
     }
 
     void FocusWeb()
