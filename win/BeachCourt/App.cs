@@ -134,13 +134,20 @@ class App : Form
 
     void MakeDesktopLayer()
     {
-        if (!Visible && !_mouseTaken) return;
         _inputHooks?.Stop();
         DesktopLayer.SetClickThrough(Handle, true);
-        Opacity = 0;
-        Hide();
+        if (!Visible) Show();
+        Opacity = 1;
         _mouseTaken = false;
         Log("input mode=desktop-layer");
+    }
+
+    void HideForOtherApp()
+    {
+        _inputHooks?.Stop();
+        DesktopLayer.SetClickThrough(Handle, true);
+        Opacity = 0;   // 不 Hide，避免 WebView2 首次显示时黑色清屏闪烁
+        _mouseTaken = false;
     }
 
     void FocusWeb()
@@ -228,7 +235,7 @@ class App : Form
         if (!desktop)
         {
             if (_mouseTaken) _ = _bridge.CallAsync("court.outside()");
-            MakeDesktopLayer();
+            HideForOtherApp();
             return;
         }
 
