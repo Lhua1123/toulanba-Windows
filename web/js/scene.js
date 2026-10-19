@@ -455,6 +455,7 @@ function addStaticNet(g) {
 
 function createNetSwing(hoop) {
   const pivot = hoop?.getObjectByName('netPivot');
+  const restY = pivot?.position.y ?? 0;
   let started = 0, power = 0;
   return {
     start(p = 1) {
@@ -466,7 +467,7 @@ function createNetSwing(hoop) {
       const t = (performance.now() - started) / 1000;
       if (t > 1.8) {
         pivot.rotation.set(0, 0, 0);
-        pivot.position.y = 0;
+        pivot.position.y = restY;
         started = 0;
         return;
       }
@@ -475,7 +476,7 @@ function createNetSwing(hoop) {
       const twist = Math.sin(t * 8 + 0.8) * decay;
       pivot.rotation.x = swing * 0.14 * power;
       pivot.rotation.z = twist * 0.08 * power;
-      pivot.position.y = -Math.abs(Math.sin(t * 10)) * decay * 0.06 * power;
+      pivot.position.y = restY - Math.abs(Math.sin(t * 10)) * decay * 0.06 * power;
     },
   };
 }
