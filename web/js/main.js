@@ -65,6 +65,11 @@ function showStats(animate = true) {
   world.scoreboard?.set(stats.made, stats.attempts, animate);
   lastActive = performance.now();
 }
+function swingNet(power = 1) {
+  if (LAYER === 'demo') world.swingNet(power);
+  else post({ type: 'netSwing', power });
+}
+
 function saveStats() {
   if (LAYER !== 'demo') post({ type: 'stats', ...stats });
   else try { localStorage.setItem('court-stats', JSON.stringify(stats)); } catch {}
@@ -117,6 +122,7 @@ if (HAS_FRONT) {
   balls = new BallSystem({
     scene: world.front, camera, images, sfx,
     onScore: (b) => {
+      swingNet(1.15);
       toast(`${b.files.length} 个文件进了篮筐 · Ctrl+Alt+Z 撤销放回`); hint('scored', 5000);
       aim.result(b, true);
       stats.made = Math.min(stats.made + 1, stats.attempts); showStats(); saveStats();
@@ -327,6 +333,7 @@ window.court = {
   outside() { aim?.end(true); },
   // time of day from the app's menu: noon (the original) | morning | dusk | night | auto
   setTime(mode, instant = false) { world.setTime(mode, instant); lastActive = performance.now(); },
+  netSwing(power = 1) { world.swingNet(power); lastActive = performance.now(); },
   // the app pauses the wallpaper layer while windows cover the desktop
   pause(on) { paused = on; },
   ids: () => (balls ? balls.balls.map((b) => b.id) : []),

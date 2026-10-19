@@ -434,7 +434,50 @@ function addStaticNet(g) {
   });
   mesh.instanceMatrix.needsUpdate = true;
   mesh.frustumCulled = false;
-  g.add(mesh);
+
+  // Pivot exactly at the rim so the whole net can bounce naturally after a score.
+  const pivot = new THREE.Group();
+  pivot.name = 'netPivot';
+  pivot.position.set(0, H.rimY, H.rimZ);
+  nodes.forEach((n) => n.sub(pivot.position));
+  links.forEach(([a, b], i) => {
+    d.subVectors(nodes[b], nodes[a]);
+    const len = d.length();
+    q.setFromUnitVectors(up, d.normalize());
+    scale.set(0.011, len, 0.011);
+    m.compose(nodes[a], q, scale);
+    mesh.setMatrixAt(i, m);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  pivot.add(mesh);
+  g.add(pivot);
+}
+
+function createNetSwing(hoop) {
+  const pivot = hoop?.getObjectByName('netPivot');
+  let started = 0, power = 0;
+  return {
+    start(p = 1) {
+      power = Math.max(0.25, Math.min(2, Number(p) || 1));
+      started = performance.now();
+    },
+    update() {
+      if (!pivot || !started) return;
+      const t = (performance.now() - started) / 1000;
+      if (t > 1.8) {
+        pivot.rotation.set(0, 0, 0);
+        pivot.position.y = 0;
+        started = 0;
+        return;
+      }
+      const decay = Math.exp(-t * 2.6);
+      const swing = Math.sin(t * 11) * decay;
+      const twist = Math.sin(t * 8 + 0.8) * decay;
+      pivot.rotation.x = swing * 0.14 * power;
+      pivot.rotation.z = twist * 0.08 * power;
+      pivot.position.y = -Math.abs(Math.sin(t * 10)) * decay * 0.06 * power;
+    },
+  };
 }
 
 export function buildHoop() {
@@ -486,11 +529,13 @@ export function buildWorld(backRenderer, frontRenderer) {
   const back = backRenderer ? buildBack(backRenderer) : null;
   const front = frontRenderer ? buildFront(frontRenderer) : null;
   const daylight = new Daylight([back?.rig, front?.rig].filter(Boolean), [backRenderer, frontRenderer].filter(Boolean));
+  const netSwing = createNetSwing(backRenderer ? back?.hoop : front?.hoop);
   return {
     back: back?.scene, front: front?.scene,
     hoop: backRenderer ? back?.hoop : front?.hoop,
     scoreboard: backRenderer ? back?.scoreboard : front?.scoreboard,
-    update(t) { back?.update(t); },
+    update(t) { back?.update(t); netSwing.update(); },
+    swingNet(power = 1) { netSwing.start(power); },
     // noon | morning | dusk | night | auto
     setTime(mode, instant) { daylight.set(mode, instant); },
     get time() { return daylight.mode; },

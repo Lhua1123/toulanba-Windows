@@ -324,6 +324,13 @@ class App : Form
         if (_court?.Bridge != null) _court.Bridge.CallAsync("court.setTime('" + mode + "')");
     }
 
+    void SetNetSwingAll(double power)
+    {
+        string js = string.Format("court.netSwing({0})", power.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        _ = _bridge.CallAsync(js);
+        if (_court?.Bridge != null) _court.Bridge.CallAsync(js);
+    }
+
     void SetStatsAll(int made, int attempts)
     {
         string js = string.Format("court.setStats({0}, {1})", made, attempts);
@@ -369,6 +376,10 @@ class App : Form
                 break;
             case "log": Log("[" + Str(payload, "level") + "] " + Str(payload, "text")); break;
             case "hit": ReadHitRegions(payload); break;
+            case "netSwing":
+                double power = payload.TryGetProperty("power", out var p) ? p.GetDouble() : 1;
+                SetNetSwingAll(power);
+                break;
             case "input": Log("web input " + payload.ToString()); break;
             default: Log("js->native [" + type + "] " + payload.ToString()); break;
         }
