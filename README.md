@@ -71,3 +71,9 @@ powershell -ExecutionPolicy Bypass -File .\win\package-windows.ps1
 - `Ctrl+Alt+X` 的文件只在桌面与 `.beach-court` 暂存目录之间移动；`Ctrl+Alt+D` 投进后进入回收站
 - 正常退出和异常退出后都会尝试恢复暂存文件
 - 配置、日志和撤销数据放在当前用户的 AppData 目录
+
+## 致谢
+
+本项目基于 [Sin10874/toulanba](https://github.com/Sin10874/toulanba) 进行 Windows 移植和功能扩展，感谢原作者。
+
+如相关内容涉及侵权，请联系我，我会尽快删除。
