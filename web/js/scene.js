@@ -400,6 +400,43 @@ function makePalm(base, height, lean, seed, frondMat, frondDepth, trunkMat) {
 
 // ---------- hoop ----------
 
+// Windows 的静态球网属于篮筐本体，画在桌面图标下面，不会随前层休眠闪烁或盖住图标。
+function addStaticNet(g) {
+  const K = 12, rows = 5, H = HOOP;
+  const nodes = [];
+  for (let i = 0; i <= rows; i++) {
+    for (let k = 0; k < K; k++) {
+      const a = ((k + (i % 2) * 0.5) / K) * Math.PI * 2;
+      const rr = H.rimR * (1 - 0.42 * (i / rows));
+      nodes.push(new THREE.Vector3(Math.cos(a) * rr, H.rimY - (i / rows) * H.netLen, H.rimZ + Math.sin(a) * rr));
+    }
+  }
+  const id = (i, k) => i * K + ((k + K) % K);
+  const links = [];
+  for (let i = 0; i < rows; i++) for (let k = 0; k < K; k++) {
+    links.push([id(i, k), id(i + 1, k)]);
+    links.push([id(i, k), id(i + 1, i % 2 ? k + 1 : k - 1)]);
+  }
+  for (let k = 0; k < K; k++) links.push([id(rows, k), id(rows, k + 1)]);
+
+  const geo = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true);
+  geo.translate(0, 0.5, 0);
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: COL.net, roughness: 0.9 }), links.length);
+  const up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), q = new THREE.Quaternion();
+  const m = new THREE.Matrix4(), scale = new THREE.Vector3();
+  links.forEach(([a, b], i) => {
+    d.subVectors(nodes[b], nodes[a]);
+    const len = d.length();
+    q.setFromUnitVectors(up, d.normalize());
+    scale.set(0.011, len, 0.011);
+    m.compose(nodes[a], q, scale);
+    mesh.setMatrixAt(i, m);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.frustumCulled = false;
+  g.add(mesh);
+}
+
 export function buildHoop() {
   const g = new THREE.Group();
   const H = HOOP;
@@ -435,6 +472,8 @@ export function buildHoop() {
   rim.rotation.x = Math.PI / 2;
   const bracketLen = H.rimZ - H.rimR - H.boardZ;
   add(new THREE.BoxGeometry(0.2, 0.09, bracketLen), rimMat, 0, H.rimY - 0.02, H.boardZ + bracketLen / 2);
+
+  addStaticNet(g);
 
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;

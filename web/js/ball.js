@@ -159,7 +159,9 @@ export class BallSystem {
     Object.assign(this, { scene, camera, images, sfx, onScore, onBanked });
     this.balls = [];
     this.rim = rimCenter;
-    this.net = new Net(scene);
+    // The Windows front overlay must stay icon-safe: its static net belongs to the
+    // back/desktop layer, so only the browser demo gets the interactive Verlet net.
+    this.net = document.body.dataset.layer === 'front' ? null : new Net(scene);
     this.ray = new THREE.Raycaster();
     this.plane = new THREE.Plane(UP, 0);
     this.size = { w: innerWidth, h: innerHeight };
@@ -452,9 +454,9 @@ export class BallSystem {
     const sub = 4, h = dt / sub;
     for (let i = 0; i < sub; i++) {
       for (const b of this.balls) this.step(b, h);
-      this.net.step(h, this.balls);
+      this.net?.step(h, this.balls);
     }
-    this.net.render();
+    this.net?.render();
     const now = performance.now();
     for (const b of this.balls) {
       const age = (now - b.born) / 1000;
